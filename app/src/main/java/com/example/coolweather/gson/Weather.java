@@ -15,6 +15,9 @@ public class Weather {
 
     public String city;
 
+    @SerializedName("cityid")
+    public String cityId;
+
     @SerializedName("data")
     public List<DaysWeather> daysWeatherList;
 

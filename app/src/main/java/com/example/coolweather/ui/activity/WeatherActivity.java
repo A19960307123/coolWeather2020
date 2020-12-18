@@ -1,8 +1,12 @@
 package com.example.coolweather.ui.activity;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.view.GravityCompat;
+import androidx.drawerlayout.widget.DrawerLayout;
+import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Build;
@@ -10,6 +14,7 @@ import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.view.LayoutInflater;
 import android.view.View;
+import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -21,6 +26,7 @@ import com.example.coolweather.R;
 import com.example.coolweather.gson.DaysWeather;
 import com.example.coolweather.gson.LifeSuggestion;
 import com.example.coolweather.gson.Weather;
+import com.example.coolweather.service.AutoUpdateService;
 import com.example.coolweather.util.HttpUtil;
 import com.example.coolweather.util.Utility;
 
@@ -67,6 +73,13 @@ public class WeatherActivity extends AppCompatActivity {
 
     private Context mContext;
 
+    public DrawerLayout drawerLayout;
+
+    private Button navButton;
+
+    public SwipeRefreshLayout swipeRefreshLayout;
+
+    public String weatherId;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -89,31 +102,39 @@ public class WeatherActivity extends AppCompatActivity {
         carWashText = findViewById(R.id.car_wash_text);
         sportText = findViewById(R.id.sport_text);
         bingPicImg =findViewById(R.id.bing_pic_img);
+        drawerLayout = findViewById(R.id.drawer_layout);
+        navButton = findViewById(R.id.nav_button);
+        swipeRefreshLayout = findViewById(R.id.swipe_refresh);
+        swipeRefreshLayout.setColorSchemeResources(R.color.teal_700);
         mContext = getApplicationContext();
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(mContext);
         String weatherString = prefs.getString("weather", null);
-
         String bing_pic = prefs.getString("bing_pic", null);
+
+
+        navButton.setOnClickListener(v -> {
+            drawerLayout.openDrawer(GravityCompat.START);
+        });
+
         if (bing_pic != null){
             Glide.with(mContext).load(bing_pic).into(bingPicImg);
         }else {
             loadBingPic();
         }
-
-//        if (weatherString != null) {
-//            //如果有缓存直接解析天气数据
-//            Weather weather = Utility.handleWeatherResponse(weatherString);
-//            showWeatherInfo(weather);
-//        } else {
-//            //无缓存区服务器查询天气
-//            String weatherId = getIntent().getStringExtra("weather_id");
-//            weatherLayout.setVisibility(View.INVISIBLE);
-//            requestWeather(weatherId);
-//        }
-        String weatherId = getIntent().getStringExtra("weather_id");
-        weatherLayout.setVisibility(View.INVISIBLE);
-        requestWeather(weatherId);
-
+        if (weatherString != null) {
+            //如果有缓存直接解析天气数据
+            Weather weather = Utility.handleWeatherResponse(weatherString);
+            weatherId= weather.cityId;
+            showWeatherInfo(weather);
+        } else {
+            //无缓存区服务器查询天气
+            weatherId = getIntent().getStringExtra("weather_id");
+            weatherLayout.setVisibility(View.INVISIBLE);
+            requestWeather(weatherId);
+        }
+        swipeRefreshLayout.setOnRefreshListener(() -> {
+            requestWeather(weatherId);
+        });
     }
 
     //加载bing每日一图
@@ -150,9 +171,8 @@ public class WeatherActivity extends AppCompatActivity {
      * 功能描述:
      * 根据城市id请求城市天气信息
      */
-    private void requestWeather(String weatherId) {
-        String cityId = weatherId.substring(2);
-        String weatherUrl = "https://tianqiapi.com/api?version=v1&appid=83719921&appsecret=eilpb1IT&cityid="+cityId;
+    public void requestWeather(String weatherId) {
+        String weatherUrl = "https://tianqiapi.com/api?version=v1&appid=83719921&appsecret=eilpb1IT&cityid="+weatherId;
         HttpUtil.sendOkHttpRequest(weatherUrl, new Callback() {
             @Override
             public void onFailure(@NotNull Call call, @NotNull IOException e) {
@@ -160,6 +180,7 @@ public class WeatherActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     Toast.makeText(WeatherActivity.this, "获取天气信息失败", Toast.LENGTH_SHORT).show();
                 });
+                swipeRefreshLayout.setRefreshing(false);
             }
 
             @Override
@@ -175,9 +196,11 @@ public class WeatherActivity extends AppCompatActivity {
                     } else {
                         Toast.makeText(WeatherActivity.this, "获取天气信息失败", Toast.LENGTH_SHORT).show();
                     }
+                    swipeRefreshLayout.setRefreshing(false);
                 });
             }
         });
+        loadBingPic();
     }
 
     private void showWeatherInfo(Weather weather) {
@@ -222,5 +245,7 @@ public class WeatherActivity extends AppCompatActivity {
             }
         }
         weatherLayout.setVisibility(View.VISIBLE);
+        Intent intent = new Intent(this, AutoUpdateService.class);
+        startService(intent);
     }
 }
